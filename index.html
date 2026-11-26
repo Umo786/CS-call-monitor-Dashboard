@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en" translate="no" class="notranslate">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="google" content="notranslate">
+<title>InBody Calls Monitor Dashboard</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+:root{
+  --paper:#EEF1EC;
+  --card:#FFFFFF;
+  --ink:#182129;
+  --soft:#5C6670;
+  --line:#D8DED9;
+  --open:#E2963A;
+  --pending:#5C7A93;
+  --closed:#6E8F72;
+  --missed:#C1502E;
+  --open-bg:#FDF3E7;
+  --pending-bg:#EAF0F5;
+  --closed-bg:#EBF3EC;
+  --missed-bg:#FBEAE5;
+  --shadow:rgba(24,33,41,.18);
+  --overlay:rgba(24,33,41,.55);
+  color-scheme:light;
+}
+
+html[data-theme="dark"]{
+  --paper:#11161B;
+  --card:#1B2228;
+  --ink:#F2F5F3;
+  --soft:#AAB5BE;
+  --line:#354049;
+  --open:#F0A84B;
+  --pending:#7EA2BF;
+  --closed:#83A988;
+  --missed:#E06E50;
+  --open-bg:#35281A;
+  --pending-bg:#1E2E3A;
+  --closed-bg:#1E3024;
+  --missed-bg:#39211C;
+  --shadow:rgba(0,0,0,.42);
+  --overlay:rgba(0,0,0,.72);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Arial,sans-serif;transition:background .2s ease,color .2s ease}
+button,input,select,textarea{font:inherit}
+#app{min-height:100vh;padding:28px 24px 60px}
+
+.brand-block{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  min-width:0;
+}
+.brand-logo{
+  width:150px;
+  max-width:38vw;
+  height:auto;
+  display:block;
+  flex:0 0 auto;
+  object-fit:contain;
+  object-position:left center;
+}
+.brand-copy{
+  min-width:0;
+}
+.header-actions{
+  display:flex;
+  align-items:flex-end;
+  gap:14px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.appearance-control{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.appearance-select{
+  min-width:155px;
+  border:1px solid var(--line);
+  border-radius:7px;
+  background:var(--card);
+  color:var(--ink);
+  padding:8px 10px;
+  cursor:pointer;
+  font-size:12px;
+}
+html[data-theme="dark"] .filter-btn,
+html[data-theme="dark"] .open-btn,
+html[data-theme="dark"] .action-btn,
+html[data-theme="dark"] .view-btn{
+  background:var(--card);
+  color:var(--ink);
+}
+html[data-theme="dark"] .filter-btn.primary,
+html[data-theme="dark"] .action-btn.primary,
+html[data-theme="dark"] .view-btn.active{
+  background:#F2F5F3;
+  color:#11161B;
+  border-color:#F2F5F3;
+}
+html[data-theme="dark"] .permanent-btn{
+  background:var(--missed);
+  color:#fff;
+}
+html[data-theme="dark"] .input,
+html[data-theme="dark"] .select,
+html[data-theme="dark"] .textarea,
+html[data-theme="dark"] .appearance-select{
+  background:var(--card);
+  color:var(--ink);
+}
+
+.header{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:20px}
+.title{margin:0;font-size:27px}
+.sub{margin:5px 0 0;color:var(--soft);font-size:13px}
+.live{display:flex;align-items:center;gap:8px;color:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--closed)}
+.banner{display:none;padding:10px 13px;border:1px solid var(--missed);background:var(--missed-bg);color:var(--missed);border-radius:7px;margin-bottom:16px;font-size:13px}
+.filters{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:18px}
+.filter-row,.presets{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.presets{margin-top:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.label{color:var(--soft);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.input,.select,.textarea{border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);padding:9px 10px}
+.filter-btn,.open-btn,.action-btn{border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);padding:9px 12px;cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.filter-btn.primary,.action-btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.filter-btn.active{background:var(--pending-bg);border-color:var(--pending);color:var(--pending)}
+.filter-btn:disabled,.open-btn:disabled{opacity:.55;cursor:not-allowed}
+.range-summary{margin-top:11px;color:var(--soft);font-size:11px}
+
+.view-bar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+}
+.view-tabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.view-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.view-btn{
+  border:1px solid var(--line);
+  border-radius:7px;
+  padding:9px 13px;
+  background:var(--card);
+  color:var(--ink);
+  cursor:pointer;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.view-btn.active{
+  background:var(--ink);
+  color:#fff;
+  border-color:var(--ink);
+}
+.recycle-count{
+  display:inline-flex;
+  min-width:20px;
+  justify-content:center;
+  margin-left:5px;
+  padding:2px 6px;
+  border-radius:20px;
+  background:var(--missed-bg);
+  color:var(--missed);
+}
+.ticket-actions{
+  display:flex;
+  gap:7px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.recycle-btn,.restore-btn,.permanent-btn{
+  border:1px solid var(--line);
+  border-radius:6px;
+  color:var(--ink);
+  padding:8px 10px;
+  cursor:pointer;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  white-space:nowrap;
+}
+.recycle-btn{
+  border-color:#D7A093;
+  color:var(--missed);
+  background:var(--missed-bg);
+}
+.restore-btn{
+  border-color:var(--closed);
+  color:var(--closed);
+  background:var(--closed-bg);
+}
+.permanent-btn{
+  border-color:var(--missed);
+  color:#fff;
+  background:var(--missed);
+}
+.deleted-info{
+  margin-top:7px;
+  padding:7px 8px;
+  border-radius:6px;
+  background:var(--missed-bg);
+  border:1px solid #E7B7AA;
+  color:var(--missed);
+  font-size:11px;
+  line-height:1.4;
+}
+.action-btn.danger{
+  background:var(--missed-bg);
+  color:var(--missed);
+  border-color:var(--missed);
+  margin-right:auto;
+}
+
+.advanced-filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(3,minmax(145px,1fr)) auto;gap:10px;align-items:end;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.filter-search{min-width:0}.filter-search .input{width:100%}
+.filter-state{margin-top:10px;display:flex;flex-wrap:wrap;gap:7px}
+.filter-chip{display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--card);border-radius:20px;padding:4px 9px;color:var(--soft);font-size:10px}
+
+.rule{background:var(--pending-bg);border:1px solid var(--pending);color:var(--pending);border-radius:8px;padding:11px 14px;margin-bottom:18px;font-size:12px;line-height:1.45}
+.counts{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:26px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:relative;overflow:hidden}
+.card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+.card.open:before{background:var(--open)}
+.card.pending:before{background:var(--pending)}
+.card.closed:before{background:var(--closed)}
+.card.missed:before{background:var(--missed)}
+.count-label{color:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.count-num{font-size:32px;font-weight:700;margin-top:6px}
+.list-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:11px}
+.section-title{margin:0;color:var(--soft);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.result-count{color:var(--soft);font-size:11px}
+.list{display:flex;flex-direction:column;gap:10px}
+.ticket{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--open);border-radius:8px;padding:14px 16px;display:grid;grid-template-columns:auto 1fr auto auto;gap:16px;align-items:center}
+.ticket.pending{border-left-color:var(--pending)}
+.ticket.closed{border-left-color:var(--closed)}
+.badge{display:inline-block;padding:4px 9px;border-radius:20px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.badge.open{background:var(--open-bg);color:var(--open)}
+.badge.pending{background:var(--pending-bg);color:var(--pending)}
+.badge.closed{background:var(--closed-bg);color:var(--closed)}
+.badge.missed{background:var(--missed-bg);color:var(--missed)}
+.caller{min-width:0}
+.caller-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta,.time{color:var(--soft);font-size:11.5px;margin-top:3px}
+.time{white-space:nowrap}
+.latest-note{margin-top:7px;border:1px solid var(--line);background:var(--card);border-radius:6px;padding:7px 8px;color:var(--soft);font-size:11px;line-height:1.4}
+.latest-note strong{color:var(--ink)}
+.empty{text-align:center;color:var(--soft);padding:40px 20px;background:var(--card);border:1px solid var(--line);border-radius:8px}
+.empty.loading{display:flex;align-items:center;justify-content:center;gap:10px}
+.spinner{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--pending);animation:spin .8s linear infinite;flex:0 0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.modal-backdrop{display:none;position:fixed;inset:0;background:var(--overlay);z-index:9999;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop.open{display:flex}
+.modal{width:min(760px,100%);max-height:92vh;overflow:auto;background:var(--card);border-radius:12px;box-shadow:0 24px 70px var(--shadow)}
+.modal-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding:18px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:2}
+.modal-title{margin:0;font-size:20px}
+.modal-sub{margin:5px 0 0;color:var(--soft);font-size:11px}
+.close-btn{border:0;background:transparent;font-size:27px;cursor:pointer;color:var(--soft)}
+.modal-body{padding:20px}
+.details{display:grid;grid-template-columns:repeat(2,1fr);gap:11px;margin-bottom:18px}
+.detail{border:1px solid var(--line);border-radius:7px;padding:10px 12px;background:var(--card)}
+.detail-key{display:block;color:var(--soft);font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.detail-value{font-size:13px;overflow-wrap:anywhere}
+.editor{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:15px;margin-bottom:18px}
+.editor-title,.history-title{margin:0 0 12px;font-size:14px}
+.form-grid{display:grid;grid-template-columns:180px 1fr;gap:12px}
+.full{grid-column:1/-1}
+.textarea{min-height:105px;resize:vertical;line-height:1.45}
+.required{display:none;margin-top:5px;color:var(--missed);font-size:11px}
+.required.show{display:block}
+.actions{display:flex;justify-content:flex-end;gap:9px;margin-top:13px}
+.action-btn:disabled{opacity:.6;cursor:not-allowed}
+
+.odoo-panel{
+  margin-bottom:18px;
+  padding:15px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--card);
+}
+.odoo-panel-title{
+  margin:0 0 10px;
+  font-size:14px;
+  font-weight:700;
+}
+.odoo-status{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.odoo-status-text{
+  font-size:12px;
+  color:var(--soft);
+  line-height:1.45;
+}
+.odoo-created{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:var(--closed);
+  font-weight:700;
+}
+.odoo-create-btn{
+  border:1px solid var(--ink);
+  border-radius:6px;
+  background:var(--ink);
+  color:#fff;
+  padding:9px 14px;
+  cursor:pointer;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.odoo-create-btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+html[data-theme="dark"] .odoo-create-btn{
+  background:#F2F5F3;
+  color:#11161B;
+  border-color:#F2F5F3;
+}
+
+.history{display:flex;flex-direction:column;gap:9px}
+.history-empty{border:1px dashed var(--line);border-radius:7px;padding:18px;text-align:center;color:var(--soft);font-size:12px}
+.note-card{border:1px solid var(--line);border-left:4px solid var(--open);border-radius:7px;padding:11px 12px;background:var(--card)}
+.note-card.pending{border-left-color:var(--pending)}
+.note-card.closed{border-left-color:var(--closed)}
+.note-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--soft);font-size:10px;margin-bottom:7px}
+.note-text{font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.toast{display:none;position:fixed;right:20px;bottom:20px;background:var(--ink);color:#fff;padding:11px 14px;border-radius:7px;z-index:10000;font-size:12px}
+.toast.show{display:block}
+
+@media(max-width:700px){
+  #app{padding:20px 14px 40px}
+  .counts{grid-template-columns:repeat(2,1fr)}
+  .ticket-actions{align-items:flex-start}
+  .view-bar{align-items:flex-start}
+  .ticket{grid-template-columns:1fr}
+  .details,.form-grid{grid-template-columns:1fr}
+  .advanced-filters{grid-template-columns:1fr}
+  .full{grid-column:auto}
+  .input,.select,.textarea{width:100%}
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div class="header">
+    <div class="brand-block">
+      <img class="brand-logo" src="data:image/png;base64,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" alt="InBody logo">
+      <div class="brand-copy">
+        <h1 class="title">InBody Calls Monitor Dashboard</h1>
+        <p class="sub">Company line · live calls, status updates and manager notes</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <label class="appearance-control">
+        <span class="label">Appearance</span>
+        <select class="appearance-select" id="appearance-select">
+          <option value="system">System Default</option>
+          <option value="light">Light Mode</option>
+          <option value="dark">Dark Mode</option>
+        </select>
+      </label>
+
+      <div class="live">
+        <span class="dot"></span>
+        <span id="live-text">Connecting</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="filters">
+    <div class="filter-row">
+      <label class="field">
+        <span class="label">From date</span>
+        <input class="input" type="date" id="date-from">
+      </label>
+      <label class="field">
+        <span class="label">To date</span>
+        <input class="input" type="date" id="date-to">
+      </label>
+      <button class="filter-btn primary" id="apply-range" type="button">Apply range</button>
+    </div>
+
+    <div class="advanced-filters">
+      <label class="field filter-search">
+        <span class="label">Search caller, number or note</span>
+        <input class="input" type="search" id="search-filter" placeholder="Example: Rahul, 98200, client will call">
+      </label>
+      <label class="field">
+        <span class="label">Status</span>
+        <select class="select" id="status-filter">
+          <option value="all">All statuses</option>
+          <option value="open">Open</option>
+          <option value="pending">Pending</option>
+          <option value="closed">Closed</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="label">Call type</span>
+        <select class="select" id="type-filter">
+          <option value="all">All call types</option>
+          <option value="incoming">Incoming</option>
+          <option value="outgoing">Outgoing</option>
+          <option value="missed">Missed</option>
+          <option value="rejected">Rejected</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="label">Notes</span>
+        <select class="select" id="note-filter">
+          <option value="all">All calls</option>
+          <option value="with">With notes</option>
+          <option value="without">Without notes</option>
+        </select>
+      </label>
+      <button class="filter-btn" id="reset-filters" type="button">Reset filters</button>
+    </div>
+
+    <div class="presets">
+      <button class="filter-btn preset active" data-range="today" type="button">Today</button>
+      <button class="filter-btn preset" data-range="7days" type="button">Last 7 days</button>
+      <button class="filter-btn preset" data-range="30days" type="button">Last 30 days</button>
+      <button class="filter-btn preset" data-range="month" type="button">This month</button>
+      <button class="filter-btn preset" data-range="all" type="button">All calls</button>
+    </div>
+    <div class="range-summary" id="range-summary"></div>
+    <div class="filter-state" id="filter-state"></div>
+  </div>
+
+  <div class="rule">
+    <strong>Status rule:</strong> Every new call starts as Open. Pending is used when follow-up is required. Closed is selected only after the issue is confirmed resolved. A note is mandatory for Pending and Closed.
+  </div>
+
+  <div class="counts">
+    <div class="card" title="Counts every call record, including repeat calls from the same number"><div class="count-label">Total Calls</div><div class="count-num" id="count-total">0</div></div>
+    <div class="card" title="Counts each phone number only once in the selected date range and filters"><div class="count-label">Unique Numbers</div><div class="count-num" id="count-unique">0</div></div>
+    <div class="card open"><div class="count-label">Open</div><div class="count-num" id="count-open">0</div></div>
+    <div class="card pending"><div class="count-label">Pending</div><div class="count-num" id="count-pending">0</div></div>
+    <div class="card closed"><div class="count-label">Closed</div><div class="count-num" id="count-closed">0</div></div>
+    <div class="card missed"><div class="count-label">Missed Calls</div><div class="count-num" id="count-missed">0</div></div>
+  </div>
+
+  <div class="view-bar">
+    <div class="view-tabs">
+      <button class="view-btn active" id="active-view" type="button">Active Calls</button>
+      <button class="view-btn" id="recycle-view" type="button">
+        Recycle Bin <span class="recycle-count" id="recycle-count">0</span>
+      </button>
+    </div>
+    <div class="view-actions">
+      <button class="filter-btn" id="export-excel" type="button" title="Export the calls currently shown below to an Excel file">Export as Excel</button>
+    </div>
+  </div>
+
+  <div class="list-head">
+    <p class="section-title" id="section-title">Today's calls</p>
+    <span class="result-count" id="result-count">0 calls</span>
+  </div>
+  <div class="list" id="call-list"></div>
+</div>
+
+<div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <h2 class="modal-title" id="modal-title">Call details</h2>
+        <p class="modal-sub" id="modal-sub"></p>
+      </div>
+      <button class="close-btn" id="close-modal" type="button" aria-label="Close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="details" id="details"></div>
+
+      <div class="editor" id="call-editor">
+        <h3 class="editor-title">Update status and add note</h3>
+        <div class="form-grid">
+          <label class="field">
+            <span class="label">New status</span>
+            <select class="select" id="edit-status">
+              <option value="open">Open</option>
+              <option value="pending">Pending</option>
+              <option value="closed">Closed</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="label">Updated by</span>
+            <input class="input" id="updated-by" type="text" placeholder="Your name">
+          </label>
+
+          <label class="field full">
+            <span class="label">Update note</span>
+            <textarea class="textarea" id="note-text" placeholder="Example: The client informed us they will contact us again."></textarea>
+            <span class="required" id="required-note">A note is required when changing the call to Pending or Closed.</span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="action-btn danger" id="move-recycle" type="button">Move to Recycle Bin</button>
+          <button class="action-btn" id="cancel-update" type="button">Cancel</button>
+          <button class="action-btn primary" id="save-update" type="button">Save update</button>
+        </div>
+      </div>
+
+
+      <div class="odoo-panel" id="odoo-panel">
+        <h3 class="odoo-panel-title">Odoo Helpdesk</h3>
+        <div class="odoo-status">
+          <div class="odoo-status-text" id="odoo-status-text">
+            No Odoo ticket has been created for this call.
+          </div>
+          <button class="odoo-create-btn" id="create-odoo-ticket" type="button">
+            Create Odoo Ticket
+          </button>
+        </div>
+      </div>
+
+      <h3 class="history-title">Update history</h3>
+      <div class="history" id="note-history"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const APPEARANCE_KEY = "inbodyCallDashboardAppearance";
+  const appearanceSelectEl = document.getElementById("appearance-select");
+  const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function resolvedTheme(mode){
+    if(mode === "dark") return "dark";
+    if(mode === "light") return "light";
+    return systemThemeQuery.matches ? "dark" : "light";
+  }
+
+  function applyAppearance(mode){
+    const safeMode = ["system","light","dark"].includes(mode)
+      ? mode
+      : "system";
+
+    document.documentElement.dataset.theme = resolvedTheme(safeMode);
+    appearanceSelectEl.value = safeMode;
+    localStorage.setItem(APPEARANCE_KEY, safeMode);
+  }
+
+  appearanceSelectEl.addEventListener("change",()=>{
+    applyAppearance(appearanceSelectEl.value);
+  });
+
+  const onSystemThemeChange = ()=>{
+    const savedMode = localStorage.getItem(APPEARANCE_KEY) || "system";
+    if(savedMode === "system") applyAppearance("system");
+  };
+
+  if(typeof systemThemeQuery.addEventListener === "function"){
+    systemThemeQuery.addEventListener("change",onSystemThemeChange);
+  }else if(typeof systemThemeQuery.addListener === "function"){
+    systemThemeQuery.addListener(onSystemThemeChange);
+  }
+
+  applyAppearance(localStorage.getItem(APPEARANCE_KEY) || "system");
+
+  const FIREBASE_CONFIG = {
+    apiKey: "PASTE_FIREBASE_WEB_API_KEY_HERE",
+    authDomain: "cs-calls-dashboard.firebaseapp.com",
+    projectId: "cs-calls-dashboard",
+    storageBucket: "cs-calls-dashboard.firebasestorage.app",
+    messagingSenderId: "52313849120",
+    appId: "PASTE_FIREBASE_WEB_APP_ID_HERE"
+  };
+
+  const STATUS_LABEL = {open:"Open",pending:"Pending",closed:"Closed"};
+
+  const listEl = document.getElementById("call-list");
+  const liveTextEl = document.getElementById("live-text");
+  const bannerEl = document.getElementById("banner");
+  const dateFromEl = document.getElementById("date-from");
+  const dateToEl = document.getElementById("date-to");
+  const rangeSummaryEl = document.getElementById("range-summary");
+  const sectionTitleEl = document.getElementById("section-title");
+  const resultCountEl = document.getElementById("result-count");
+  const activeViewEl = document.getElementById("active-view");
+  const recycleViewEl = document.getElementById("recycle-view");
+  const recycleCountEl = document.getElementById("recycle-count");
+  const searchFilterEl = document.getElementById("search-filter");
+  const statusFilterEl = document.getElementById("status-filter");
+  const typeFilterEl = document.getElementById("type-filter");
+  const noteFilterEl = document.getElementById("note-filter");
+  const resetFiltersEl = document.getElementById("reset-filters");
+  const filterStateEl = document.getElementById("filter-state");
+  const modalBackdropEl = document.getElementById("modal-backdrop");
+  const modalTitleEl = document.getElementById("modal-title");
+  const modalSubEl = document.getElementById("modal-sub");
+  const detailsEl = document.getElementById("details");
+  const callEditorEl = document.getElementById("call-editor");
+  const moveRecycleEl = document.getElementById("move-recycle");
+  const editStatusEl = document.getElementById("edit-status");
+  const updatedByEl = document.getElementById("updated-by");
+  const noteTextEl = document.getElementById("note-text");
+  const requiredNoteEl = document.getElementById("required-note");
+  const saveUpdateEl = document.getElementById("save-update");
+  const noteHistoryEl = document.getElementById("note-history");
+  const odooPanelEl = document.getElementById("odoo-panel");
+  const odooStatusTextEl = document.getElementById("odoo-status-text");
+  const createOdooTicketEl = document.getElementById("create-odoo-ticket");
+  const toastEl = document.getElementById("toast");
+  const exportExcelEl = document.getElementById("export-excel");
+
+  let allCalls = [];
+  let currentRange = null;
+  let currentCallId = null;
+  let currentView = "active";
+  let toastTimer = null;
+  let hasLoadedOnce = false;
+
+  function escapeHtml(value){
+    return String(value == null ? "" : value)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function toMillis(value){
+    if(value == null) return 0;
+    if(typeof value === "number") return value;
+    if(typeof value === "string"){
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    if(typeof value.toMillis === "function") return value.toMillis();
+    if(typeof value.toDate === "function") return value.toDate().getTime();
+    if(typeof value.seconds === "number") return value.seconds * 1000;
+    return 0;
+  }
+
+  function callMillis(call){
+    return toMillis(call.callTimeMillis || call.timestamp);
+  }
+
+  function effectiveStatus(call){
+    const status = String(call.status || "").toLowerCase();
+    return ["open","pending","closed"].includes(status) ? status : "open";
+  }
+
+  function isMissed(call){
+    const type = String(call.type || "").toLowerCase();
+    return type === "missed" || type === "rejected";
+  }
+
+  function normalizePhoneNumber(number){
+    const raw = String(number || "").trim();
+    if(!raw) return "";
+
+    // Ignore formatting differences such as spaces, +, hyphens and brackets.
+    const digits = raw.replace(/\D/g, "");
+    return digits || raw.toLowerCase();
+  }
+
+  function uniqueNumberCount(calls){
+    const numbers = new Set();
+    calls.forEach(call=>{
+      const normalized = normalizePhoneNumber(call.number);
+      if(normalized) numbers.add(normalized);
+    });
+    return numbers.size;
+  }
+
+  function formatTime(value){
+    const millis = toMillis(value);
+    if(!millis) return "Unknown time";
+    return new Date(millis).toLocaleString(undefined,{
+      month:"short",day:"numeric",year:"numeric",
+      hour:"2-digit",minute:"2-digit"
+    });
+  }
+
+  function formatDuration(seconds){
+    const sec = Number(seconds || 0);
+    if(!sec) return "—";
+    const minutes = Math.floor(sec/60);
+    const remaining = sec%60;
+    return minutes ? `${minutes}m ${remaining}s` : `${remaining}s`;
+  }
+
+  function startOfDay(date){
+    const copy = new Date(date);
+    copy.setHours(0,0,0,0);
+    return copy;
+  }
+
+  function endOfDay(date){
+    const copy = new Date(date);
+    copy.setHours(23,59,59,999);
+    return copy;
+  }
+
+  function dateInputValue(date){
+    const y = date.getFullYear();
+    const m = String(date.getMonth()+1).padStart(2,"0");
+    const d = String(date.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function presetRange(name){
+    const now = new Date();
+    const startToday = startOfDay(now);
+    const endToday = endOfDay(now);
+
+    if(name === "today") return {name,start:startToday.getTime(),end:endToday.getTime(),label:"Today's calls"};
+
+    if(name === "7days"){
+      const start = new Date(startToday);
+      start.setDate(start.getDate()-6);
+      return {name,start:start.getTime(),end:endToday.getTime(),label:"Last 7 days"};
+    }
+
+    if(name === "30days"){
+      const start = new Date(startToday);
+      start.setDate(start.getDate()-29);
+      return {name,start:start.getTime(),end:endToday.getTime(),label:"Last 30 days"};
+    }
+
+    if(name === "month"){
+      const start = new Date(now.getFullYear(),now.getMonth(),1);
+      return {name,start:start.getTime(),end:endToday.getTime(),label:"This month"};
+    }
+
+    return {name:"all",start:null,end:null,label:"All calls"};
+  }
+
+  function updateSectionTitle(){
+    const baseLabel = currentRange ? currentRange.label : "Calls";
+    sectionTitleEl.textContent =
+      currentView === "recycle"
+        ? `Recycle Bin · ${baseLabel}`
+        : baseLabel;
+  }
+
+  function applyRange(range){
+    currentRange = range;
+    updateSectionTitle();
+
+    document.querySelectorAll(".preset").forEach(btn=>{
+      btn.classList.toggle("active",btn.dataset.range === range.name);
+    });
+
+    if(range.start == null){
+      dateFromEl.value = "";
+      dateToEl.value = "";
+      rangeSummaryEl.textContent = "Showing all available calls";
+    }else{
+      dateFromEl.value = dateInputValue(new Date(range.start));
+      dateToEl.value = dateInputValue(new Date(range.end));
+      rangeSummaryEl.textContent =
+        `Showing ${new Date(range.start).toLocaleDateString()} to ${new Date(range.end).toLocaleDateString()}`;
+    }
+
+    render();
+  }
+
+  function hasNotes(call){
+    return Boolean((call.latestNote && String(call.latestNote).trim()) || (Array.isArray(call.noteHistory) && call.noteHistory.length));
+  }
+
+  function searchableText(call){
+    const historyText = Array.isArray(call.noteHistory)
+      ? call.noteHistory.map(item => [item.text,item.updatedBy,item.status].join(" ")).join(" ")
+      : "";
+    return [call.callerName,call.number,call.type,effectiveStatus(call),call.latestNote,historyText]
+      .filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function renderFilterState(){
+    const chips=[];
+    const search=searchFilterEl.value.trim();
+    if(search) chips.push(`Search: ${escapeHtml(search)}`);
+    if(statusFilterEl.value!=="all") chips.push(`Status: ${escapeHtml(STATUS_LABEL[statusFilterEl.value])}`);
+    if(typeFilterEl.value!=="all") chips.push(`Type: ${escapeHtml(typeFilterEl.value)}`);
+    if(noteFilterEl.value==="with") chips.push("With notes");
+    if(noteFilterEl.value==="without") chips.push("Without notes");
+    filterStateEl.innerHTML=chips.length
+      ? chips.map(chip=>`<span class="filter-chip">${chip}</span>`).join("")
+      : '<span class="filter-chip">No additional filters</span>';
+  }
+
+  function filteredCalls(){
+    const search=searchFilterEl.value.trim().toLowerCase();
+    const status=statusFilterEl.value;
+    const type=typeFilterEl.value;
+    const notes=noteFilterEl.value;
+    return allCalls.slice().sort((a,b)=>callMillis(b)-callMillis(a)).filter(call=>{
+      const isDeleted = call.isDeleted === true;
+
+      if(currentView === "active" && isDeleted) return false;
+      if(currentView === "recycle" && !isDeleted) return false;
+
+      const value=callMillis(call);
+      if(currentRange && currentRange.start!=null && (value<currentRange.start || value>currentRange.end)) return false;
+      if(status!=="all" && effectiveStatus(call)!==status) return false;
+      const callType=String(call.type||"other").toLowerCase();
+      if(type!=="all" && callType!==type) return false;
+      if(notes==="with" && !hasNotes(call)) return false;
+      if(notes==="without" && hasNotes(call)) return false;
+      if(search && !searchableText(call).includes(search)) return false;
+      return true;
+    });
+  }
+
+  function updateDocumentationSummary(calls){
+    const rangeText =
+      currentRange && currentRange.start != null
+        ? `Showing ${new Date(currentRange.start).toLocaleDateString()} to ${new Date(currentRange.end).toLocaleDateString()}`
+        : "Showing all available calls";
+
+    rangeSummaryEl.textContent =
+      `${rangeText} · Total Calls: ${calls.length} · Unique Numbers: ${uniqueNumberCount(calls)}`;
+  }
+
+  function render(){
+    renderFilterState();
+    const calls = filteredCalls();
+    updateDocumentationSummary(calls);
+    const counts = {open:0,pending:0,closed:0,missed:0};
+
+    calls.forEach(call=>{
+      counts[effectiveStatus(call)]++;
+      if(isMissed(call)) counts.missed++;
+    });
+
+    document.getElementById("count-total").textContent = calls.length;
+    document.getElementById("count-unique").textContent = uniqueNumberCount(calls);
+    document.getElementById("count-open").textContent = counts.open;
+    document.getElementById("count-pending").textContent = counts.pending;
+    document.getElementById("count-closed").textContent = counts.closed;
+    document.getElementById("count-missed").textContent = counts.missed;
+    resultCountEl.textContent = `${calls.length} ${calls.length === 1 ? "call" : "calls"}`;
+    recycleCountEl.textContent =
+      allCalls.filter(call => call.isDeleted === true).length;
+    exportExcelEl.disabled = calls.length === 0;
+
+    if(!hasLoadedOnce){
+      listEl.innerHTML = '<div class="empty loading"><span class="spinner"></span> Loading calls…</div>';
+      return;
+    }
+
+    if(!calls.length){
+      listEl.innerHTML = currentView === "recycle"
+        ? '<div class="empty">Recycle Bin is empty for the selected date range and filters.</div>'
+        : '<div class="empty">No active calls found for the selected date range and filters.</div>';
+      return;
+    }
+
+    listEl.innerHTML = calls.map(call=>{
+      const status = effectiveStatus(call);
+      const latest = call.latestNote
+        ? `<div class="latest-note"><strong>Latest update:</strong> ${escapeHtml(call.latestNote)}</div>`
+        : "";
+
+      return `
+        <div class="ticket ${status}">
+          <span class="badge ${isMissed(call) ? "missed" : status}">${escapeHtml(call.type || "other")}</span>
+          <div class="caller">
+            <div class="caller-name">${escapeHtml(call.callerName || call.number || "Unknown caller")}</div>
+            <div class="meta">${escapeHtml(call.number || "")} · ${escapeHtml(formatDuration(call.durationSeconds))}</div>
+            ${latest}
+          </div>
+          <div class="ticket-actions">
+            <button class="open-btn" type="button" data-id="${escapeHtml(call.id)}">Open call</button>
+            ${currentView === "active"
+              ? `<button class="recycle-btn" type="button" data-id="${escapeHtml(call.id)}">Recycle</button>`
+              : `<button class="restore-btn" type="button" data-id="${escapeHtml(call.id)}">Restore</button>
+                 <button class="permanent-btn" type="button" data-id="${escapeHtml(call.id)}">Delete permanently</button>`
+            }
+          </div>
+          <div class="time">
+            ${escapeHtml(formatTime(call.callTimeMillis || call.timestamp))}
+            ${call.isDeleted === true
+              ? `<div class="deleted-info">
+                   Deleted by ${escapeHtml(call.deletedBy || "Dashboard user")}<br>
+                   ${escapeHtml(formatTime(call.deletedAtMillis || call.deletedAt))}
+                   ${call.deletedReason ? `<br>Reason: ${escapeHtml(call.deletedReason)}` : ""}
+                 </div>`
+              : ""
+            }
+          </div>
+        </div>`;
+    }).join("");
+
+    document.querySelectorAll(".open-btn").forEach(button=>{
+      button.addEventListener("click",()=>openCall(button.dataset.id));
+    });
+
+    document.querySelectorAll(".recycle-btn").forEach(button=>{
+      button.addEventListener("click",()=>moveToRecycleBin(button.dataset.id));
+    });
+
+    document.querySelectorAll(".restore-btn").forEach(button=>{
+      button.addEventListener("click",()=>restoreCall(button.dataset.id));
+    });
+
+    document.querySelectorAll(".permanent-btn").forEach(button=>{
+      button.addEventListener("click",()=>permanentlyDeleteCall(button.dataset.id));
+    });
+  }
+
+  function getCurrentCall(){
+    return allCalls.find(call=>call.id === currentCallId) || null;
+  }
+
+  function getHistory(call){
+    return Array.isArray(call.noteHistory)
+      ? call.noteHistory.slice().sort((a,b)=>Number(b.createdAtMillis||0)-Number(a.createdAtMillis||0))
+      : [];
+  }
+
+  function renderModal(call){
+    if(!call) return;
+
+    const status = effectiveStatus(call);
+    modalTitleEl.textContent = call.callerName || call.number || "Unknown caller";
+    modalSubEl.textContent = `${call.number || "Unknown number"} · ${formatTime(call.callTimeMillis || call.timestamp)}`;
+
+    detailsEl.innerHTML = `
+      <div class="detail"><span class="detail-key">Call type</span><span class="detail-value">${escapeHtml(call.type || "other")}</span></div>
+      <div class="detail"><span class="detail-key">Current status</span><span class="detail-value">${escapeHtml(STATUS_LABEL[status])}</span></div>
+      <div class="detail"><span class="detail-key">Duration</span><span class="detail-value">${escapeHtml(formatDuration(call.durationSeconds))}</span></div>
+      <div class="detail"><span class="detail-key">Device</span><span class="detail-value">${escapeHtml(call.deviceName || "Unknown device")}</span></div>
+      ${call.isDeleted === true
+        ? `<div class="detail">
+             <span class="detail-key">Recycle Bin</span>
+             <span class="detail-value">
+               Deleted by ${escapeHtml(call.deletedBy || "Dashboard user")}<br>
+               ${escapeHtml(formatTime(call.deletedAtMillis || call.deletedAt))}
+               ${call.deletedReason ? `<br>Reason: ${escapeHtml(call.deletedReason)}` : ""}
+             </span>
+           </div>`
+        : ""
+      }`;
+
+    callEditorEl.style.display = call.isDeleted === true ? "none" : "block";
+    moveRecycleEl.style.display = call.isDeleted === true ? "none" : "inline-block";
+    odooPanelEl.style.display = call.isDeleted === true ? "none" : "block";
+
+    if(call.odooTicketCreated === true){
+      const who = call.odooTicketCreatedBy
+        ? ` by ${escapeHtml(call.odooTicketCreatedBy)}`
+        : "";
+
+      const when = call.odooTicketCreatedAtMillis
+        ? ` · ${escapeHtml(formatTime(call.odooTicketCreatedAtMillis))}`
+        : "";
+
+      odooStatusTextEl.innerHTML =
+        `<span class="odoo-created">✓ Odoo Ticket Created</span>${who}${when}`;
+
+      createOdooTicketEl.disabled = true;
+      createOdooTicketEl.textContent = "Odoo Ticket Created";
+    }else{
+      odooStatusTextEl.textContent =
+        "No Odoo ticket has been created for this call.";
+
+      createOdooTicketEl.disabled = false;
+      createOdooTicketEl.textContent = "Create Odoo Ticket";
+    }
+
+    editStatusEl.value = status;
+    noteTextEl.value = "";
+    requiredNoteEl.classList.remove("show");
+
+    const history = getHistory(call);
+    if(!history.length){
+      noteHistoryEl.innerHTML = '<div class="history-empty">No update notes have been added yet.</div>';
+    }else{
+      noteHistoryEl.innerHTML = history.map(item=>{
+        const itemStatus = ["open","pending","closed"].includes(item.status) ? item.status : "open";
+        return `
+          <div class="note-card ${itemStatus}">
+            <div class="note-meta">
+              <span>${escapeHtml(STATUS_LABEL[itemStatus])} · ${escapeHtml(item.updatedBy || "Dashboard user")}</span>
+              <span>${escapeHtml(formatTime(Number(item.createdAtMillis || 0)))}</span>
+            </div>
+            <div class="note-text">${escapeHtml(item.text || "Status updated")}</div>
+          </div>`;
+      }).join("");
+    }
+  }
+
+  function openCall(id){
+    currentCallId = id;
+    renderModal(getCurrentCall());
+    modalBackdropEl.classList.add("open");
+    modalBackdropEl.setAttribute("aria-hidden","false");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeModal(){
+    currentCallId = null;
+    modalBackdropEl.classList.remove("open");
+    modalBackdropEl.setAttribute("aria-hidden","true");
+    document.body.style.overflow = "";
+  }
+
+
+  async function moveToRecycleBin(id){
+    const call = allCalls.find(item => item.id === id);
+    if(!call) return;
+
+    const caller = call.callerName || call.number || "this call";
+    const confirmed = window.confirm(
+      `Move ${caller} to the Recycle Bin?\n\nThe call can be restored later.`
+    );
+
+    if(!confirmed) return;
+
+    const reasonInput = window.prompt(
+      "Reason for moving this call to the Recycle Bin (optional):",
+      "Not required"
+    );
+
+    if(reasonInput === null) return;
+
+    const now = Date.now();
+    const deletedBy =
+      updatedByEl.value.trim() ||
+      localStorage.getItem("cmUpdatedBy") ||
+      "Dashboard user";
+
+    try{
+      await db.collection("calls").doc(id).update({
+        isDeleted: true,
+        deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        deletedAtMillis: now,
+        deletedBy: deletedBy,
+        deletedReason: reasonInput.trim(),
+        noteHistory: firebase.firestore.FieldValue.arrayUnion({
+          text: reasonInput.trim()
+            ? `Moved to Recycle Bin: ${reasonInput.trim()}`
+            : "Moved to Recycle Bin",
+          status: effectiveStatus(call),
+          previousStatus: effectiveStatus(call),
+          createdAtMillis: now,
+          updatedBy: deletedBy
+        })
+      });
+
+      if(currentCallId === id) closeModal();
+      showToast("Call moved to Recycle Bin.");
+    }catch(error){
+      showBanner(`Could not move call to Recycle Bin: ${error.message}`);
+    }
+  }
+
+  async function restoreCall(id){
+    const call = allCalls.find(item => item.id === id);
+    if(!call) return;
+
+    const confirmed = window.confirm(
+      `Restore ${call.callerName || call.number || "this call"} to Active Calls?`
+    );
+
+    if(!confirmed) return;
+
+    const now = Date.now();
+    const restoredBy =
+      updatedByEl.value.trim() ||
+      localStorage.getItem("cmUpdatedBy") ||
+      "Dashboard user";
+
+    try{
+      await db.collection("calls").doc(id).update({
+        isDeleted: false,
+        restoredAt: firebase.firestore.FieldValue.serverTimestamp(),
+        restoredAtMillis: now,
+        restoredBy: restoredBy,
+        deletedAt: firebase.firestore.FieldValue.delete(),
+        deletedAtMillis: firebase.firestore.FieldValue.delete(),
+        deletedBy: firebase.firestore.FieldValue.delete(),
+        deletedReason: firebase.firestore.FieldValue.delete(),
+        noteHistory: firebase.firestore.FieldValue.arrayUnion({
+          text: "Restored from Recycle Bin",
+          status: effectiveStatus(call),
+          previousStatus: effectiveStatus(call),
+          createdAtMillis: now,
+          updatedBy: restoredBy
+        })
+      });
+
+      if(currentCallId === id) closeModal();
+      showToast("Call restored to Active Calls.");
+    }catch(error){
+      showBanner(`Could not restore call: ${error.message}`);
+    }
+  }
+
+  async function permanentlyDeleteCall(id){
+    const call = allCalls.find(item => item.id === id);
+    if(!call) return;
+
+    const confirmed = window.confirm(
+      `Permanently delete ${call.callerName || call.number || "this call"}?\n\nThis cannot be undone.`
+    );
+
+    if(!confirmed) return;
+
+    try{
+      await db.collection("calls").doc(id).delete();
+      if(currentCallId === id) closeModal();
+      showToast("Call permanently deleted.");
+    }catch(error){
+      showBanner(
+        `Permanent deletion failed: ${error.message}. ` +
+        "Your Firestore rules must allow document deletion."
+      );
+    }
+  }
+
+
+  async function createOdooTicketFromCurrentCall(){
+    const call = getCurrentCall();
+    if(!call || !currentCallId) return;
+
+    if(call.odooTicketCreated === true){
+      showToast("An Odoo ticket already exists for this call.");
+      return;
+    }
+
+    const updatedBy =
+      updatedByEl.value.trim() ||
+      localStorage.getItem("cmUpdatedBy") ||
+      "Dashboard user";
+
+    const confirmed = window.confirm(
+      `Create an Odoo Helpdesk ticket for ${call.callerName || call.number || "this call"}?`
+    );
+
+    if(!confirmed) return;
+
+    createOdooTicketEl.disabled = true;
+    createOdooTicketEl.textContent = "Creating...";
+    odooStatusTextEl.textContent = "Creating ticket in Odoo...";
+
+    const payload = {
+      callerName: call.callerName || call.number || "Unknown Caller",
+      number: call.number || "",
+      callType: call.type || "",
+      callTime: formatTime(call.callTimeMillis || call.timestamp),
+      duration: formatDuration(call.durationSeconds),
+      note: call.latestNote || ""
+    };
+
+    try{
+      const response = await fetch("/api/create-odoo-ticket", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if(!response.ok || result.success !== true){
+        throw new Error(result.error || "Odoo ticket creation failed");
+      }
+
+      const now = Date.now();
+
+      await db.collection("calls").doc(currentCallId).update({
+        odooTicketCreated: true,
+        odooTicketCreatedAt:
+          firebase.firestore.FieldValue.serverTimestamp(),
+        odooTicketCreatedAtMillis: now,
+        odooTicketCreatedBy: updatedBy,
+        noteHistory: firebase.firestore.FieldValue.arrayUnion({
+          text: "Odoo Helpdesk ticket created",
+          status: effectiveStatus(call),
+          previousStatus: effectiveStatus(call),
+          createdAtMillis: now,
+          updatedBy: updatedBy
+        })
+      });
+
+      odooStatusTextEl.innerHTML =
+        '<span class="odoo-created">✓ Odoo Ticket Created</span>';
+
+      createOdooTicketEl.textContent = "Odoo Ticket Created";
+      createOdooTicketEl.disabled = true;
+
+      showToast("Odoo Helpdesk ticket created successfully.");
+
+    }catch(error){
+      console.error("Odoo ticket creation failed:", error);
+      odooStatusTextEl.textContent =
+        `Ticket creation failed: ${error.message}`;
+
+      createOdooTicketEl.disabled = false;
+      createOdooTicketEl.textContent = "Create Odoo Ticket";
+
+      showBanner(`Odoo ticket creation failed: ${error.message}`);
+    }
+  }
+
+  function showBanner(message){
+    bannerEl.textContent = message;
+    bannerEl.style.display = "block";
+  }
+
+  function hideBanner(){
+    bannerEl.style.display = "none";
+  }
+
+  function showToast(message){
+    toastEl.textContent = message;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>toastEl.classList.remove("show"),2600);
+  }
+
+  function exportToExcel(){
+    const calls = filteredCalls();
+    if(!calls.length){
+      showToast("No calls to export for the current view and filters.");
+      return;
+    }
+
+    const uniqueNumbers = uniqueNumberCount(calls);
+
+    const rows = calls.map(call=>{
+      const status = effectiveStatus(call);
+      const row = {
+        "Caller Name": call.callerName || "",
+        "Number": call.number || "",
+        "Call Type": call.type || "other",
+        "Status": STATUS_LABEL[status] || "Open",
+        "Duration": formatDuration(call.durationSeconds),
+        "Call Time": formatTime(call.callTimeMillis || call.timestamp),
+        "Device": call.deviceName || "",
+        "Latest Note": call.latestNote || ""
+      };
+
+      if(currentView === "recycle"){
+        row["Deleted By"] = call.deletedBy || "";
+        row["Deleted At"] = formatTime(call.deletedAtMillis || call.deletedAt);
+        row["Delete Reason"] = call.deletedReason || "";
+      }
+
+      return row;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!cols"] = Object.keys(rows[0]).map(key=>({
+      wch: Math.max(key.length, 18)
+    }));
+
+    const workbook = XLSX.utils.book_new();
+
+    const summaryRows = [
+      ["InBody Calls Monitor - Documentation Summary", ""],
+      ["View", currentView === "recycle" ? "Recycle Bin" : "Active Calls"],
+      ["From Date",
+        currentRange && currentRange.start != null
+          ? new Date(currentRange.start).toLocaleDateString()
+          : "All available dates"
+      ],
+      ["To Date",
+        currentRange && currentRange.end != null
+          ? new Date(currentRange.end).toLocaleDateString()
+          : "All available dates"
+      ],
+      ["Total Calls", calls.length],
+      ["Unique Numbers", uniqueNumbers],
+      ["Open", calls.filter(call => effectiveStatus(call) === "open").length],
+      ["Pending", calls.filter(call => effectiveStatus(call) === "pending").length],
+      ["Closed", calls.filter(call => effectiveStatus(call) === "closed").length],
+      ["Missed / Rejected Calls", calls.filter(call => isMissed(call)).length]
+    ];
+
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+    summarySheet["!cols"] = [{wch:32},{wch:24}];
+    XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+
+    const sheetName = currentView === "recycle" ? "Recycle Bin" : "Calls";
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    const stamp = dateInputValue(new Date());
+    const fileName = `InBody-Calls-${currentView === "recycle" ? "recycle-bin" : "active"}-${stamp}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+
+    showToast(`Exported ${rows.length} total calls and ${uniqueNumbers} unique numbers to Excel.`);
+  }
+
+  function setView(view){
+    currentView = view;
+    activeViewEl.classList.toggle("active", view === "active");
+    recycleViewEl.classList.toggle("active", view === "recycle");
+    updateSectionTitle();
+    closeModal();
+    render();
+  }
+
+  activeViewEl.addEventListener("click",()=>setView("active"));
+  recycleViewEl.addEventListener("click",()=>setView("recycle"));
+  exportExcelEl.addEventListener("click",exportToExcel);
+
+  document.querySelectorAll(".preset").forEach(button=>{
+    button.addEventListener("click",()=>applyRange(presetRange(button.dataset.range)));
+  });
+
+  searchFilterEl.addEventListener("input",render);
+  statusFilterEl.addEventListener("change",render);
+  typeFilterEl.addEventListener("change",render);
+  noteFilterEl.addEventListener("change",render);
+
+  resetFiltersEl.addEventListener("click",()=>{
+    searchFilterEl.value="";
+    statusFilterEl.value="all";
+    typeFilterEl.value="all";
+    noteFilterEl.value="all";
+    applyRange(presetRange("today"));
+  });
+
+  document.getElementById("apply-range").addEventListener("click",()=>{
+    if(!dateFromEl.value || !dateToEl.value){
+      showBanner("Select both From date and To date.");
+      return;
+    }
+
+    const start = startOfDay(new Date(dateFromEl.value+"T00:00:00"));
+    const end = endOfDay(new Date(dateToEl.value+"T00:00:00"));
+
+    if(start > end){
+      showBanner("From date cannot be later than To date.");
+      return;
+    }
+
+    hideBanner();
+    applyRange({name:"custom",start:start.getTime(),end:end.getTime(),label:"Selected date range"});
+  });
+
+  document.getElementById("close-modal").addEventListener("click",closeModal);
+  document.getElementById("cancel-update").addEventListener("click",closeModal);
+
+  modalBackdropEl.addEventListener("click",event=>{
+    if(event.target === modalBackdropEl) closeModal();
+  });
+
+  document.addEventListener("keydown",event=>{
+    if(event.key === "Escape" && modalBackdropEl.classList.contains("open")) closeModal();
+  });
+
+  updatedByEl.value = localStorage.getItem("cmUpdatedBy") || "";
+  updatedByEl.addEventListener("change",()=>{
+    localStorage.setItem("cmUpdatedBy",updatedByEl.value.trim());
+  });
+
+  editStatusEl.addEventListener("change",()=>requiredNoteEl.classList.remove("show"));
+
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const db = firebase.firestore();
+
+  createOdooTicketEl.addEventListener("click",()=>{
+    createOdooTicketFromCurrentCall();
+  });
+
+  moveRecycleEl.addEventListener("click",()=>{
+    if(currentCallId) moveToRecycleBin(currentCallId);
+  });
+
+  document.getElementById("save-update").addEventListener("click",async()=>{
+    if(!currentCallId) return;
+
+    const call = getCurrentCall();
+    const status = editStatusEl.value;
+    const note = noteTextEl.value.trim();
+    const updatedBy = updatedByEl.value.trim() || "Dashboard user";
+
+    if((status === "pending" || status === "closed") && !note){
+      requiredNoteEl.classList.add("show");
+      noteTextEl.focus();
+      return;
+    }
+
+    requiredNoteEl.classList.remove("show");
+    localStorage.setItem("cmUpdatedBy",updatedBy);
+
+    saveUpdateEl.disabled = true;
+    saveUpdateEl.textContent = "Saving...";
+
+    const now = Date.now();
+    const historyItem = {
+      text: note || "Status updated",
+      status: status,
+      previousStatus: effectiveStatus(call || {}),
+      createdAtMillis: now,
+      updatedBy: updatedBy
+    };
+
+    const updateData = {
+      status: status,
+      statusSource: "manual",
+      statusUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      latestNoteStatus: status,
+      noteUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      noteUpdatedAtMillis: now,
+      noteHistory: firebase.firestore.FieldValue.arrayUnion(historyItem)
+    };
+
+    if(note) updateData.latestNote = note;
+
+    try{
+      await db.collection("calls").doc(currentCallId).update(updateData);
+      noteTextEl.value = "";
+      showToast("Call update saved.");
+    }catch(error){
+      showBanner(`Call update failed: ${error.message}`);
+    }finally{
+      saveUpdateEl.disabled = false;
+      saveUpdateEl.textContent = "Save update";
+    }
+  });
+
+  db.collection("calls").orderBy("timestamp","desc").limit(10000).onSnapshot(snapshot=>{
+    allCalls = snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+    hasLoadedOnce = true;
+    liveTextEl.textContent = `Live · ${allCalls.length} total calls`;
+    hideBanner();
+    render();
+
+    if(currentCallId){
+      const call = getCurrentCall();
+      if(call){
+        renderModal(call);
+      }else{
+        closeModal();
+      }
+    }
+  },error=>{
+    liveTextEl.textContent = "Connection error";
+    showBanner(`Could not load calls: ${error.message}`);
+  });
+
+  applyRange(presetRange("today"));
+})();
+</script>
+</body>
+</html>
