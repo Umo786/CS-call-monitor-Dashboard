@@ -1,11 +1,24 @@
+# Local environment and credentials
 .env
 .env.*
 !.env.example
 config.local.js
 firebase.local.js
+secret/odoo-webhook.txt
+**/secret/odoo-webhook.txt
+**/google-services.json
+*service-account*.json
 *.pem
 *.key
-*service-account*.json
+*.keystore
+*.jks
+local.properties
+
+# Dependencies and build output
 node_modules/
+**/.gradle/
+**/build/
+**/.idea/
+**/*.iml
 __pycache__/
 .DS_Store
