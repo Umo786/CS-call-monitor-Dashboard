@@ -1,0 +1,1 @@
+Copy the repository root index.html into this folder and rename it dashboard.html.
