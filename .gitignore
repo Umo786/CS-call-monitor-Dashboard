@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+config.local.js
+firebase.local.js
+*.pem
+*.key
+*service-account*.json
+node_modules/
+__pycache__/
+.DS_Store
