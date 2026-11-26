@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS Call Monitor Dashboard</title>
+</head>
+<body>
+<!-- 
+  CALL MONITOR DASHBOARD
+  ======================
+  1. Register a Firebase Web App and paste its Web appId below.
+  2. The other known project values are already filled in. Until the Web appId is added,
+     the dashboard runs in setup/demo mode so you can preview it immediately.
+  3. Once connected, this updates in real time as the Android app on
+     the company phone logs calls.
+-->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --paper:#EEF1EC;
+    --card:#FFFFFF;
+    --ink:#182129;
+    --ink-soft:#5C6670;
+    --line:#D8DED9;
+    --open:#E2963A;
+    --pending:#5C7A93;
+    --closed:#6E8F72;
+    --missed:#C1502E;
+    --open-bg:#FDF3E7;
+    --pending-bg:#EAF0F5;
+    --closed-bg:#EBF3EC;
+    --missed-bg:#FBEAE5;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  #cm-root{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    padding:28px 24px 60px;
+    min-height:100vh;
+  }
+  .cm-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:16px;
+    margin-bottom:22px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:18px;
+  }
+  .cm-title{
+    font-family:'Space Grotesk','Inter',sans-serif;
+    font-weight:600;
+    font-size:26px;
+    letter-spacing:-0.02em;
+    margin:0;
+  }
+  .cm-sub{
+    color:var(--ink-soft);
+    font-size:13px;
+    margin-top:4px;
+  }
+  .cm-live{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+  .cm-dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--closed);
+    animation:cm-pulse 2s infinite;
+  }
+  @keyframes cm-pulse{
+    0%{box-shadow:0 0 0 0 rgba(110,143,114,0.5);}
+    70%{box-shadow:0 0 0 7px rgba(110,143,114,0);}
+    100%{box-shadow:0 0 0 0 rgba(110,143,114,0);}
+  }
+  .cm-banner{
+    background:var(--open-bg);
+    border:1px solid var(--open);
+    color:#7A4A16;
+    font-size:13px;
+    padding:10px 14px;
+    border-radius:6px;
+    margin-bottom:20px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .cm-counts{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:14px;
+    margin-bottom:28px;
+  }
+  .cm-count-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+  }
+  .cm-count-card::before{
+    content:'';
+    position:absolute;
+    left:0;top:0;bottom:0;
+    width:4px;
+  }
+  .cm-count-card.open::before{background:var(--open);}
+  .cm-count-card.pending::before{background:var(--pending);}
+  .cm-count-card.closed::before{background:var(--closed);}
+  .cm-count-card.missed::before{background:var(--missed);}
+  .cm-count-label{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  .cm-count-num{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:32px;
+    font-weight:600;
+  }
+  .cm-section-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--ink-soft);
+    margin:0 0 12px 2px;
+  }
+  .cm-list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .cm-ticket{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-left:none;
+    border-radius:8px;
+    display:grid;
+    grid-template-columns:auto 1fr auto auto;
+    align-items:center;
+    gap:18px;
+    padding:14px 18px;
+    position:relative;
+  }
+  .cm-ticket::before{
+    content:'';
+    position:absolute;
+    left:-1px;top:0;bottom:0;
+    width:5px;
+    border-radius:8px 0 0 8px;
+  }
+  .cm-ticket.open::before{background:var(--open);}
+  .cm-ticket.pending::before{background:var(--pending);}
+  .cm-ticket.closed::before{background:var(--closed);}
+  .cm-ticket.missed::before{background:var(--missed);}
+  .cm-badge{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    padding:4px 9px;
+    border-radius:20px;
+    white-space:nowrap;
+    width:fit-content;
+  }
+  .cm-badge.open{background:var(--open-bg);color:var(--open);}
+  .cm-badge.pending{background:var(--pending-bg);color:var(--pending);}
+  .cm-badge.closed{background:var(--closed-bg);color:var(--closed);}
+  .cm-badge.missed{background:var(--missed-bg);color:var(--missed);}
+  .cm-caller{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
+  }
+  .cm-caller-name{
+    font-weight:600;
+    font-size:14px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .cm-caller-meta{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--ink-soft);
+  }
+  .cm-time{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-align:right;
+    white-space:nowrap;
+  }
+  select.cm-status-select{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    padding:6px 8px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:var(--paper);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .cm-empty{
+    text-align:center;
+    color:var(--ink-soft);
+    padding:40px 20px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+  }
+  @media (max-width:640px){
+    .cm-counts{grid-template-columns:repeat(2,1fr);}
+    .cm-ticket{grid-template-columns:1fr;text-align:left;}
+    .cm-time{text-align:left;}
+  }
+</style>
+
+<div id="cm-root">
+  <div class="cm-header">
+    <div>
+      <p class="cm-title">Call Monitor</p>
+      <p class="cm-sub">Company line · updated automatically as calls come in</p>
+    </div>
+    <div class="cm-live"><span class="cm-dot"></span><span id="cm-live-text">Live</span></div>
+  </div>
+
+  <div id="cm-banner" style="display:none;" class="cm-banner"></div>
+
+  <div class="cm-counts">
+    <div class="cm-count-card open"><div class="cm-count-label">Open</div><div class="cm-count-num" id="cm-count-open">0</div></div>
+    <div class="cm-count-card pending"><div class="cm-count-label">Pending</div><div class="cm-count-num" id="cm-count-pending">0</div></div>
+    <div class="cm-count-card closed"><div class="cm-count-label">Closed</div><div class="cm-count-num" id="cm-count-closed">0</div></div>
+    <div class="cm-count-card missed"><div class="cm-count-label">Missed</div><div class="cm-count-num" id="cm-count-missed">0</div></div>
+  </div>
+
+  <p class="cm-section-label">Today's calls</p>
+  <div class="cm-list" id="cm-list"></div>
+</div>
+
+<script>
+(function(){
+  // =========================================================
+  // FIREBASE_CONFIG — paste your project's config object here
+  // Get this from: Firebase console → Project settings → Your apps
+  // Leave as null to preview the dashboard in demo mode.
+  // =========================================================
+  const FIREBASE_CONFIG = {
+    apiKey: "PASTE_FIREBASE_WEB_API_KEY_HERE",
+    authDomain: "cs-calls-dashboard.firebaseapp.com",
+    projectId: "cs-calls-dashboard",
+    storageBucket: "cs-calls-dashboard.firebasestorage.app",
+    messagingSenderId: "52313849120",
+    appId: "PASTE_FIREBASE_WEB_APP_ID_HERE"
+  };
+
+  const HAS_FIREBASE_CONFIG =
+    FIREBASE_CONFIG &&
+    FIREBASE_CONFIG.apiKey &&
+    FIREBASE_CONFIG.projectId &&
+    FIREBASE_CONFIG.appId &&
+    !FIREBASE_CONFIG.appId.includes("PASTE_YOUR_WEB_APP_ID");
+  /* Example:
+  const FIREBASE_CONFIG = {
+    apiKey: "PASTE_FIREBASE_WEB_API_KEY_HERE",
+    authDomain: "yourproject.firebaseapp.com",
+    projectId: "yourproject",
+    storageBucket: "yourproject.appspot.com",
+    messagingSenderId: "...",
+    appId: "PASTE_FIREBASE_WEB_APP_ID_HERE"
+  };
+  */
+
+  const listEl = document.getElementById('cm-list');
+  const bannerEl = document.getElementById('cm-banner');
+  const liveTextEl = document.getElementById('cm-live-text');
+
+  const STATUS_LABEL = {open:'Open', pending:'Pending', closed:'Closed', missed:'Missed'};
+
+  function toMillis(ts){
+    if(ts == null) return 0;
+    if(typeof ts === 'number') return ts;
+    if(typeof ts === 'string'){
+      const parsed = Date.parse(ts);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    if(typeof ts.toMillis === 'function') return ts.toMillis();
+    if(typeof ts.toDate === 'function') return ts.toDate().getTime();
+    if(typeof ts.seconds === 'number') return ts.seconds * 1000;
+    return 0;
+  }
+
+  function fmtTime(ts){
+    const millis = toMillis(ts);
+    if(!millis) return 'Unknown time';
+    const d = new Date(millis);
+    return d.toLocaleString(undefined, {
+      month:'short',
+      day:'numeric',
+      hour:'2-digit',
+      minute:'2-digit'
+    });
+  }
+  function fmtDuration(sec){
+    if(!sec) return '—';
+    const m = Math.floor(sec/60), s = sec%60;
+    return m > 0 ? m+'m '+s+'s' : s+'s';
+  }
+
+  function render(calls){
+    const counts = {open:0, pending:0, closed:0, missed:0};
+    calls.forEach(c => { if(counts[c.status] !== undefined) counts[c.status]++; });
+    document.getElementById('cm-count-open').textContent = counts.open;
+    document.getElementById('cm-count-pending').textContent = counts.pending;
+    document.getElementById('cm-count-closed').textContent = counts.closed;
+    document.getElementById('cm-count-missed').textContent = counts.missed;
+
+    if(calls.length === 0){
+      listEl.innerHTML = '<div class="cm-empty">No calls logged yet. They will appear here the moment the phone rings.</div>';
+      return;
+    }
+
+    listEl.innerHTML = calls.map(c => `
+      <div class="cm-ticket ${c.status}">
+        <span class="cm-badge ${c.status}">${c.type}</span>
+        <div class="cm-caller">
+          <span class="cm-caller-name">${c.callerName || c.number}</span>
+          <span class="cm-caller-meta">${c.number} · ${fmtDuration(c.durationSeconds)}</span>
+        </div>
+        <select class="cm-status-select" data-id="${c.id}">
+          ${Object.keys(STATUS_LABEL).map(s => `<option value="${s}" ${s===c.status?'selected':''}>${STATUS_LABEL[s]}</option>`).join('')}
+        </select>
+        <span class="cm-time">${fmtTime(c.timestamp)}</span>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.cm-status-select').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        updateStatus(e.target.dataset.id, e.target.value);
+      });
+    });
+  }
+
+  // ---------- DEMO MODE (no Firebase config yet) ----------
+  if(!HAS_FIREBASE_CONFIG){
+    bannerEl.style.display = 'block';
+    bannerEl.textContent = '⚠ Setup mode — showing sample data. Register a Firebase Web App and paste its appId into FIREBASE_CONFIG to load live calls.';
+    liveTextEl.textContent = 'Demo';
+    document.querySelector('.cm-dot').style.background = '#B7BDB8';
+
+    const demoCalls = [
+      {id:'1', callerName:'Rohit Sharma', number:'+91 98200 11122', type:'incoming', status:'open', durationSeconds:145, timestamp: Date.now()-1000*60*8},
+      {id:'2', callerName:'+91 90040 55321', number:'+91 90040 55321', type:'missed', status:'missed', durationSeconds:0, timestamp: Date.now()-1000*60*22},
+      {id:'3', callerName:'Priya Traders', number:'+91 98220 88871', type:'incoming', status:'pending', durationSeconds:312, timestamp: Date.now()-1000*60*55},
+      {id:'4', callerName:'Vendor - Airtel Support', number:'198', type:'outgoing', status:'closed', durationSeconds:88, timestamp: Date.now()-1000*60*90},
+      {id:'5', callerName:'+91 96650 12233', number:'+91 96650 12233', type:'missed', status:'missed', durationSeconds:0, timestamp: Date.now()-1000*60*130},
+    ];
+    let state = JSON.parse(JSON.stringify(demoCalls));
+    render(state);
+    window.__cmUpdateStatus = function(id, status){
+      state = state.map(c => c.id===id ? {...c, status} : c);
+      render(state);
+    };
+    window.updateStatus = window.__cmUpdateStatus;
+    return;
+  }
+
+  // ---------- LIVE MODE ----------
+  if (typeof firebase === 'undefined') {
+    bannerEl.style.display = 'block';
+    bannerEl.textContent =
+      '⚠ Firebase scripts could not be loaded. Check internet access or browser tracking protection.';
+    liveTextEl.textContent = 'Script blocked';
+    document.querySelector('.cm-dot').style.background = '#C1502E';
+    return;
+  }
+
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const db = firebase.firestore();
+
+  window.updateStatus = function(id, status){
+    db.collection('calls').doc(id).update({status: status})
+      .catch(err => {
+        console.error('Failed to update status:', err);
+        bannerEl.style.display = 'block';
+        bannerEl.textContent =
+          '⚠ Status update failed. ' +
+          (err.code ? '[' + err.code + '] ' : '') +
+          err.message;
+      });
+  };
+
+  db.collection('calls')
+    .limit(200)
+    .onSnapshot(snapshot => {
+      const calls = snapshot.docs
+        .map(doc => ({id: doc.id, ...doc.data()}))
+        .sort((a, b) => toMillis(b.timestamp) - toMillis(a.timestamp));
+
+      bannerEl.style.display = 'none';
+      liveTextEl.textContent = 'Live · ' + calls.length + ' calls';
+      render(calls);
+    }, err => {
+      console.error('Firestore listener failed:', err);
+      bannerEl.style.display = 'block';
+      bannerEl.textContent =
+        '⚠ Could not load the calls collection. ' +
+        (err.code ? '[' + err.code + '] ' : '') +
+        err.message;
+      liveTextEl.textContent = 'Connection error';
+      document.querySelector('.cm-dot').style.background = '#C1502E';
+    });
+
+  function updateStatus(id, status){ window.updateStatus(id, status); }
+
+})();
+</script>
+
+</body>
+</html>
